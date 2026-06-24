@@ -6,11 +6,11 @@ import (
 	"log"
 	"strings"
 
-	embedding "github.com/casibase/dashscope-go-sdk/embedding"
-	httpclient "github.com/casibase/dashscope-go-sdk/httpclient"
-	"github.com/casibase/dashscope-go-sdk/paraformer"
-	"github.com/casibase/dashscope-go-sdk/qwen"
-	"github.com/casibase/dashscope-go-sdk/wanx"
+	embedding "github.com/the-open-agent/dashscope-go-sdk/embedding"
+	httpclient "github.com/the-open-agent/dashscope-go-sdk/httpclient"
+	"github.com/the-open-agent/dashscope-go-sdk/paraformer"
+	"github.com/the-open-agent/dashscope-go-sdk/qwen"
+	"github.com/the-open-agent/dashscope-go-sdk/wanx"
 )
 
 type TongyiClient struct {

@@ -10,9 +10,9 @@ import (
 	"os/user"
 	"path/filepath"
 
-	dashscopego "github.com/casibase/dashscope-go-sdk"
+	dashscopego "github.com/the-open-agent/dashscope-go-sdk"
 
-	"github.com/casibase/dashscope-go-sdk/wanx"
+	"github.com/the-open-agent/dashscope-go-sdk/wanx"
 )
 
 func main() {
