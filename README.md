@@ -1,342 +1,286 @@
-### dashscopego
-forked from devinyf/dashscopego
-阿里云平台 dashscope api 的 golang 封装 (非官方)
+<div align="center">
 
-[开通DashScope并创建API-KEY](https://help.aliyun.com/zh/dashscope/developer-reference/activate-dashscope-and-create-an-api-key)
+# dashscope-go-sdk
 
-#### Examples:
-* [通义千问](#通义千问)
-* [通义千问VL(视觉理解模型)](#通义千问VL视觉理解模型)
-* [通义千问Audio(音频语言模型)](#通义千问Audio音频语言模型)
-* [通义万相(图像生成)](#通义万相图像生成)
-* [Paraformer(语音识别)](#Paraformer语音识别)
-* 模型插件调用 TODO
-* langchaingo Agent TODO
+**Go SDK for Alibaba Cloud DashScope API**
 
-开发中...
+*Supports Qwen LLM, Qwen-VL, Qwen-Audio, Wanx image generation, and Paraformer speech recognition*
 
-### 通义千问
+<br/>
+
+[![Build](https://github.com/the-open-agent/dashscope-go-sdk/workflows/Build/badge.svg?style=flat-square)](https://github.com/the-open-agent/dashscope-go-sdk/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/the-open-agent/dashscope-go-sdk?style=flat-square&color=4f46e5)](https://github.com/the-open-agent/dashscope-go-sdk/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/the-open-agent/dashscope-go-sdk.svg)](https://pkg.go.dev/github.com/the-open-agent/dashscope-go-sdk)
+[![Go Report](https://goreportcard.com/badge/github.com/the-open-agent/dashscope-go-sdk?style=flat-square)](https://goreportcard.com/report/github.com/the-open-agent/dashscope-go-sdk)
+[![License](https://img.shields.io/github/license/the-open-agent/dashscope-go-sdk?style=flat-square&color=22c55e)](https://github.com/the-open-agent/dashscope-go-sdk/blob/master/LICENSE)
+
+</div>
+
+---
+
+## What is this?
+
+`dashscope-go-sdk` is a Go client for [Alibaba Cloud DashScope](https://dashscope.aliyun.com/), providing idiomatic Go APIs for:
+
+- **Qwen** — text generation (streaming & non-streaming)
+- **Qwen-VL** — vision-language understanding
+- **Qwen-Audio** — audio-language understanding
+- **Wanx** — text-to-image generation
+- **Paraformer** — real-time speech recognition (ASR)
+
+## Install
+
+```bash
+go get github.com/the-open-agent/dashscope-go-sdk
+```
+
+## Quick Start
+
+Set your API key first ([create one here](https://help.aliyun.com/zh/dashscope/developer-reference/activate-dashscope-and-create-an-api-key)):
+
+```bash
+export DASHSCOPE_API_KEY=your-api-key
+```
+
+## Usage
+
+### Text Generation (Qwen)
+
 ```go
 import (
-	"context"
-	"fmt"
-	"os"
+    "context"
+    "fmt"
+    "os"
 
-	"github.com/eswulei/dashscope-go"
-	"github.com/eswulei/dashscope-go/qwen"
+    dashscopego "github.com/the-open-agent/dashscope-go-sdk"
+    "github.com/the-open-agent/dashscope-go-sdk/qwen"
 )
 
 func main() {
-	model := qwen.QwenTurbo
-	token := os.Getenv("DASHSCOPE_API_KEY")
+    token := os.Getenv("DASHSCOPE_API_KEY")
+    cli := dashscopego.NewTongyiClient(qwen.QwenTurbo, token)
 
-	if token == "" {
-		panic("token is empty")
-	}
+    content := qwen.TextContent{Text: "Tell me a joke"}
+    input := dashscopego.TextInput{
+        Messages: []dashscopego.TextMessage{
+            {Role: "user", Content: &content},
+        },
+    }
 
-	cli := dashscopego.NewTongyiClient(model, token)
+    // Optional: streaming callback
+    streamCallbackFn := func(ctx context.Context, chunk []byte) error {
+        fmt.Print(string(chunk))
+        return nil
+    }
 
-	content := qwen.TextContent{Text: "讲个冷笑话"}
+    req := &dashscopego.TextRequest{
+        Input:       input,
+        StreamingFn: streamCallbackFn,
+    }
 
-	input := dashscopego.TextInput{
-		Messages: []dashscopego.TextMessage{
-			{Role: "user", Content: &content},
-		},
-	}
+    resp, err := cli.CreateCompletion(context.TODO(), req)
+    if err != nil {
+        panic(err)
+    }
 
-	// (可选 SSE开启) 需要流式输出时 通过该 Callback Function 获取结果
-	streamCallbackFn := func(ctx context.Context, chunk []byte) error {
-		fmt.Print(string(chunk))
-		return nil
-	}
-	req := &dashscopego.TextRequest{
-		Input:       input,
-		StreamingFn: streamCallbackFn,
-	}
-
-	ctx := context.TODO()
-	resp, err := cli.CreateCompletion(ctx, req)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("\nnon-stream result: ")
-	fmt.Println(resp.Output.Choices[0].Message.Content.ToString())
+    fmt.Println("\nFull response:", resp.Output.Choices[0].Message.Content.ToString())
 }
 ```
 
-### 通义万相(图像生成)
-- [x] 文本生成图像
-- [ ] 人像风格重绘
-- [ ] 图像背景生成
+### Vision-Language (Qwen-VL)
+
 ```go
-func main() {
-	model := wanx.WanxV1
-	token := os.Getenv("DASHSCOPE_API_KEY")
-	if token == "" {
-		panic("token is empty")
-	}
-
-	cli := dashscopego.NewTongyiClient(model, token)
-
-	req := &wanx.ImageSynthesisRequest{
-		// Model: "wanx-v1",
-		Model: model,
-		Input: wanx.ImageSynthesisInput{
-			Prompt: "画一只松鼠",
-		},
-		Params: wanx.ImageSynthesisParams{
-			N: 1,
-		},
-		Download: true // 从 URL 下载图片
-	}
-	ctx := context.TODO()
-
-	imgBlobs, err := cli.CreateImageGeneration(ctx, req)
-	if err != nil {
-		panic(err)
-	}
-
-	for _, blob := range imgBlobs {
-		// blob.Data 会在 request 中设置了 Download: true 时下载
-		// 否则使用 blob.ImgURL
-		saveImg2Desktop(blob.ImgType, blob.Data)
-	}
-}
-
-func saveImg2Desktop(fileType string, data []byte) {
-	buf := bytes.NewBuffer(data)
-	img, _, err := image.Decode(buf)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	usr, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-
-	f, err := os.Create(filepath.Join(usr.HomeDir, "Desktop", "wanx_image.png"))
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	if err := png.Encode(f, img); err != nil {
-		panic(err)
-	}
-}
-```
-
-### 通义千问VL(视觉理解模型)
- * Image 也可以直接使用 图片本地路径 或 图片URL链接的, 参照了 dashscope python 库的实现步骤 临时上传到 oss
- * 其中上传图片到 oss 的步骤 在开发文档中还没有看到HTTP调用的例子, 所以后续可能会做变更
-```go
-func main() {
-	model := qwen.QwenVLPlus
-	token := os.Getenv("DASHSCOPE_API_KEY")
-
-	if token == "" {
-		panic("token is empty")
-	}
-
-	cli := dashscopego.NewTongyiClient(model, token)
-
-	sysContent := qwen.VLContentList{
-		{
-			Text: "You are a helpful assistant.",
-		},
-	}
-	userContent := qwen.VLContentList{
-		{
-			Text: "用唐诗体描述一下这张图片中的内容",
-		},
-		{
-            // 官方文档的例子, oss 下载
-			Image: "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
-            // 使用 图片URL链接
-            // Image: "https://pic.ntimg.cn/20140113/8800276_184351657000_2.jpg",
-            // 本地图片
-            // Image: "file:///Users/xxxx/xxxx.png",
-		},
-	}
-
-	input := dashscopego.VLInput{
-		Messages: []dashscopego.VLMessage{
-			{Role: "system", Content: &sysContent},
-			{Role: "user", Content: &userContent},
-		},
-	}
-
-	// (可选 SSE开启)需要流式输出时 通过该 Callback Function 获取结果
-	streamCallbackFn := func(ctx context.Context, chunk []byte) error {
-		fmt.Print(string(chunk))
-		return nil
-	}
-	req := &dashscopego.VLRequest{
-		Input:       input,
-		StreamingFn: streamCallbackFn,
-	}
-
-	ctx := context.TODO()
-	resp, err := cli.CreateVLCompletion(ctx, req)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("\nnon-stream result: ")
-	fmt.Println(resp.Output.Choices[0].Message.Content.ToString())
-}
-```
-
-### 通义千问Audio(音频语言模型)
-* 同 QwenVL, 如果使用本地音频文件会临时上传 oss, 之后可能会有变动
-```go
-func main() {
-	model := qwen.QwenAudioTurbo
-	token := os.Getenv("DASHSCOPE_API_KEY")
-
-	if token == "" {
-		panic("token is empty")
-	}
-
-	cli := dashscopego.NewTongyiClient(model, token)
-
-	sysContent := qwen.AudioContentList{
-		{
-			Text: "You are a helpful assistant.",
-		},
-	}
-	userContent := qwen.AudioContentList{
-		{
-			Text: "该段对话表达了什么观点? 详细分析该讲话者的语气,展现出什么样的情绪", //nolint:gosmopolitan
-		},
-		{
-			// 使用本地音频文件
-			// Audio: "file:///Users/xxx/Desktop/hello_world_female2.wav",
-			// 官方文档中的例子
-			Audio: "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav",
-		},
-	}
-
-	input := dashscopego.AudioInput{
-		Messages: []dashscopego.AudioMessage{
-			{Role: "system", Content: &sysContent},
-			{Role: "user", Content: &userContent},
-		},
-	}
-
-	// callback function:  print stream result
-	streamCallbackFn := func(ctx context.Context, chunk []byte) error {
-		log.Print(string(chunk))
-		return nil
-	}
-	req := &dashscopego.AudioRequest{
-		Input:       input,
-		StreamingFn: streamCallbackFn,
-	}
-
-	ctx := context.TODO()
-	resp, err := cli.CreateAudioCompletion(ctx, req)
-	if err != nil {
-		panic(err)
-	}
-
-	log.Println("\nnon-stream result: ")
-	log.Println(resp.Output.Choices[0].Message.Content.ToString())
-}
-```
-
-### Paraformer(语音识别)
-- [x] 实时语音识别API
-- [ ] 录音文件识别API
-
-Experimental:
-* 开发文档中 还没有看到 HTTP调用说明, 参照 dashscope python 库中的步骤实现, 将来可能会有变更
-* 参数中的: SampleRate 好像目前仅支持 16000, 使用真实录音要留意录音设备的 sample_rate 是与之否匹配
-```go
-package main
-
 import (
-	"bufio"
-	"context"
-	"fmt"
-	"os"
-	"os/user"
-	"path/filepath"
-	"time"
+    "context"
+    "fmt"
+    "os"
 
-	"github.com/eswulei/dashscope-go"
-	"github.com/eswulei/dashscope-go/paraformer"
+    dashscopego "github.com/the-open-agent/dashscope-go-sdk"
+    "github.com/the-open-agent/dashscope-go-sdk/qwen"
 )
 
 func main() {
-	model := paraformer.ParaformerRealTimeV1
-	token := os.Getenv("DASHSCOPE_API_KEY")
-	if token == "" {
-		panic("token is empty")
-	}
+    cli := dashscopego.NewTongyiClient(qwen.QwenVLPlus, os.Getenv("DASHSCOPE_API_KEY"))
 
-	cli := dashscopego.NewTongyiClient(model, token)
+    userContent := qwen.VLContentList{
+        {Text: "Describe this image in detail"},
+        {Image: "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg"},
+        // local file: {Image: "file:///path/to/image.png"}
+    }
 
-	streamCallbackFn := func(ctx context.Context, chunk []byte) error {
-		fmt.Print(string(chunk))
-		return nil
-	}
+    input := dashscopego.VLInput{
+        Messages: []dashscopego.VLMessage{
+            {Role: "system", Content: &qwen.VLContentList{{Text: "You are a helpful assistant."}}},
+            {Role: "user", Content: &userContent},
+        },
+    }
 
-	headerPara := paraformer.ReqHeader{
-		Streaming: "duplex",
-		TaskID:    paraformer.GenerateTaskID(),
-		Action:    "run-task",
-	}
+    streamCallbackFn := func(ctx context.Context, chunk []byte) error {
+        fmt.Print(string(chunk))
+        return nil
+    }
 
-	payload := paraformer.PayloadIn{
-		Parameters: paraformer.Parameters{
-			// seems like only support 16000 sample-rate.
-			SampleRate: 16000,
-			Format:     "pcm",
-		},
-		Input:     map[string]interface{}{},
-		Task:      "asr",
-		TaskGroup: "audio",
-		Function:  "recognition",
-	}
+    resp, err := cli.CreateVLCompletion(context.TODO(), &dashscopego.VLRequest{
+        Input:       input,
+        StreamingFn: streamCallbackFn,
+    })
+    if err != nil {
+        panic(err)
+    }
 
-	req := &paraformer.Request{
-		Header:      headerPara,
-		Payload:     payload,
-		StreamingFn: streamCallbackFn,
-	}
-
-	// 声音获取 实际使用时请替换成实时音频流.
-	voiceReader := readAudioFromDesktop()
-
-	reader := bufio.NewReader(voiceReader)
-
-	cli.CreateSpeechToTextGeneration(context.TODO(), req, reader)
-
-	// 等待语音识别结果输出
-	time.Sleep(5 * time.Second)
-}
-
-// 读取音频文件中的录音 模拟实时语音流. 这里下载的官方文档中的示例音频文件.
-// `https://dashscope.oss-cn-beijing.aliyuncs.com/samples/audio/paraformer/hello_world_male2.wav`.
-func readAudioFromDesktop() *bufio.Reader {
-	usr, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-
-	voiceFilePath := filepath.Join(usr.HomeDir, "Desktop", "hello_world_female2.wav")
-	f, err := os.OpenFile(voiceFilePath, os.O_RDONLY, 0640)
-	if err != nil {
-		panic(err)
-	}
-	if err != nil {
-		panic(err)
-	}
-
-	reader := bufio.NewReader(f)
-	return reader
+    fmt.Println("\nFull response:", resp.Output.Choices[0].Message.Content.ToString())
 }
 ```
+
+### Audio-Language (Qwen-Audio)
+
+```go
+import (
+    "context"
+    "log"
+    "os"
+
+    dashscopego "github.com/the-open-agent/dashscope-go-sdk"
+    "github.com/the-open-agent/dashscope-go-sdk/qwen"
+)
+
+func main() {
+    cli := dashscopego.NewTongyiClient(qwen.QwenAudioTurbo, os.Getenv("DASHSCOPE_API_KEY"))
+
+    userContent := qwen.AudioContentList{
+        {Text: "What is the speaker's emotion in this audio?"},
+        {Audio: "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav"},
+        // local file: {Audio: "file:///path/to/audio.wav"}
+    }
+
+    input := dashscopego.AudioInput{
+        Messages: []dashscopego.AudioMessage{
+            {Role: "system", Content: &qwen.AudioContentList{{Text: "You are a helpful assistant."}}},
+            {Role: "user", Content: &userContent},
+        },
+    }
+
+    resp, err := cli.CreateAudioCompletion(context.TODO(), &dashscopego.AudioRequest{
+        Input: input,
+        StreamingFn: func(ctx context.Context, chunk []byte) error {
+            log.Print(string(chunk))
+            return nil
+        },
+    })
+    if err != nil {
+        panic(err)
+    }
+
+    log.Println("Full response:", resp.Output.Choices[0].Message.Content.ToString())
+}
+```
+
+### Image Generation (Wanx)
+
+```go
+import (
+    "context"
+    "os"
+
+    dashscopego "github.com/the-open-agent/dashscope-go-sdk"
+    "github.com/the-open-agent/dashscope-go-sdk/wanx"
+)
+
+func main() {
+    cli := dashscopego.NewTongyiClient(wanx.WanxV1, os.Getenv("DASHSCOPE_API_KEY"))
+
+    req := &wanx.ImageSynthesisRequest{
+        Model: wanx.WanxV1,
+        Input: wanx.ImageSynthesisInput{
+            Prompt: "A squirrel painting in the style of Van Gogh",
+        },
+        Params: wanx.ImageSynthesisParams{
+            N: 1,
+        },
+        Download: true, // download image bytes instead of returning URL
+    }
+
+    imgBlobs, err := cli.CreateImageGeneration(context.TODO(), req)
+    if err != nil {
+        panic(err)
+    }
+
+    for _, blob := range imgBlobs {
+        // blob.Data contains image bytes when Download: true
+        // blob.ImgURL contains the image URL when Download: false
+        _ = blob
+    }
+}
+```
+
+### Speech Recognition (Paraformer)
+
+```go
+import (
+    "bufio"
+    "context"
+    "fmt"
+    "os"
+    "time"
+
+    dashscopego "github.com/the-open-agent/dashscope-go-sdk"
+    "github.com/the-open-agent/dashscope-go-sdk/paraformer"
+)
+
+func main() {
+    cli := dashscopego.NewTongyiClient(paraformer.ParaformerRealTimeV1, os.Getenv("DASHSCOPE_API_KEY"))
+
+    req := &paraformer.Request{
+        Header: paraformer.ReqHeader{
+            Streaming: "duplex",
+            TaskID:    paraformer.GenerateTaskID(),
+            Action:    "run-task",
+        },
+        Payload: paraformer.PayloadIn{
+            Parameters: paraformer.Parameters{
+                SampleRate: 16000, // only 16000 Hz is currently supported
+                Format:     "pcm",
+            },
+            Input:     map[string]interface{}{},
+            Task:      "asr",
+            TaskGroup: "audio",
+            Function:  "recognition",
+        },
+        StreamingFn: func(ctx context.Context, chunk []byte) error {
+            fmt.Print(string(chunk))
+            return nil
+        },
+    }
+
+    // Replace with a real-time audio stream in production
+    f, _ := os.Open("/path/to/audio.wav")
+    defer f.Close()
+
+    cli.CreateSpeechToTextGeneration(context.TODO(), req, bufio.NewReader(f))
+    time.Sleep(5 * time.Second) // wait for final recognition result
+}
+```
+
+## Layout
+
+```
+dashscope-go-sdk/
+├── tongyiclient.go        # Main client entry point
+├── dtypes.go              # Shared request/response types
+├── qwen/                  # Qwen text, VL, and audio models
+├── wanx/                  # Wanx image generation
+├── paraformer/            # Paraformer real-time ASR
+├── embedding/             # Text embedding
+├── httpclient/            # HTTP/WebSocket transport layer
+└── example/               # Runnable examples
+```
+
+## Quick Check
+
+```bash
+go test ./...
+```
+
+## License
+
+[Apache License 2.0](LICENSE)
