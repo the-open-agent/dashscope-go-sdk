@@ -15,9 +15,10 @@ const (
 
 	pongWait   = 20 * time.Second
 	pingPeriod = (pongWait * 8) / 10
-	// Maximum message size allowed from peer.
-	maxMessageSize = 1024
-	// maxMessageSize = 512.
+	// Maximum message size allowed from peer. 1 MiB is enough for any
+	// realistic streaming transcript; the previous 1024-byte limit caused
+	// long-form STT sessions to silently cut off mid-transcript.
+	maxMessageSize = 1 << 20
 )
 
 type IWsClient interface {
@@ -117,7 +118,8 @@ func (c *WsClient) readPump() {
 	for {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
+				websocket.IsCloseError(err, websocket.CloseMessageTooBig) {
 				c.errChan <- err
 			}
 			break
